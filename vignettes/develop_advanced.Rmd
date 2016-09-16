@@ -145,47 +145,7 @@ Note these features about custom JSON serializers require the **shiny** version 
 
 ## Preserving Widget State
 
-Many htmlwidgets allow the user to alter the appearance of the widget using her mouse.  Ordinarily these changes are lost when the web page is closed.  However if an htmlwidget wants its state preserved then it can use the `stateChanged` function that is passed as an extra parameter to its `factory` function.  Anything passed to this function will be given back to the object when it is next loaded, via an extra `state` parameter given to `renderValue`.  The `state` value ought to be able to be safely converted to and from JSON.
-
-This trivial widget will bold its text when clicked on, and will remember whether the text is bold:
-
-```{javascript}
-HTMLWidgets.widget({
-  name: 'statefulwidget',
-  type: 'output',
-
-  factory: function(el, width, height, stateChanged) {
-    return {
-      _clickHandler: null,
-
-      renderValue: function(x, state) {
-        el.innerText = x.message;      // A very simple widget.
-        if (state)
-          el.style.fontWeight = state;   // Restore state.
-
-        // Click switches the text between bold and normal.
-        var _this = this;
-        if (this._clickHandler)
-          el.removeEventListener("click", this._clickHandler);
-        this._clickHandler = function() { _this._textClick(); }
-        el.addEventListener("click", this._clickHandler);
-      },
-
-      _textClick: function() {
-        el.style.fontWeight = el.style.fontWeight === "bold" ? "normal" : "bold";
-        if (stateChanged)  // Careful - old versions of htmlwidgets will not pass this.
-          stateChanged(el.style.fontWeight);   // Will save our new state.
-      },
-
-      resize: function(width, height) {
-      }
-    };
-  }
-});
-```
-
-### Support for Preserving Widget State
-Widget state will be preserved in browser local storage when you export your widget to a static web page.  Other types of containers (e.g. Shiny) will need to provide their own storage system.
+Many htmlwidgets allow the user to alter the appearance of the widget using the user's mouse.  Ordinarily these changes are lost when the web page is closed.  However if a htmlwidget wants its state preserved then it can use the `stateChanged` function that is passed as an extra parameter to its `factory` function.  Anything passed to this function will be given back to the object when it is next loaded, via an extra `state` parameter given to `renderValue`.
 
 ## Passing JavaScript functions
 
