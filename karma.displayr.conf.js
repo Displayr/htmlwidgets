@@ -1,4 +1,6 @@
 // Karma configuration
+//
+// Tests htmlwidgets in their environment used by Displayr.
 module.exports = function(config) {
   config.set({
     frameworks: ['jasmine'],

@@ -1,4 +1,6 @@
 // Karma configuration
+//
+// Tests htmlwidgets in their native static rendering environment.
 module.exports = function(config) {
   config.set({
     frameworks: ['jasmine'],
@@ -7,11 +9,7 @@ module.exports = function(config) {
     files: [
       'inst/www/htmlwidgets.js',
       'test/src/mock_widget.js',
-      'test/spec/staticrender_spec.js',
-      // 'test/reset_browser_for_displayrrender.js',
-      // 'inst/www/htmlwidgets.js',
-      // 'test/src/mock_widget.js',
-      // 'test/spec/displayrrender_spec.js'
+      'test/spec/staticrender_spec.js'
     ],
 
     // start these browsers
