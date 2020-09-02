@@ -678,7 +678,7 @@
   // Returns { binding, element, instance }.
   window.HTMLWidgets.instantiateDisplayrWidget = function(el_parent, initialState, stateChangedHook) {
     var bindings = window.HTMLWidgets.widgets || [];
-    var matches = bindings.map(binding => ({binding: binding, found: binding.find(el_parent)})).filter(e => e.found.length);
+    var matches = bindings.map(function(binding) {return {binding: binding, found: binding.find(el_parent)};}).filter(function (e) { return e.found.length });
     if (matches.length === 0)
       throw new Error('No element was found matching an installed binding.  Have you loaded all assets?');
     const binding = matches[0].binding;
