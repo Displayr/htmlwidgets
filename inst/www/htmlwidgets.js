@@ -321,22 +321,53 @@
     }
   }
 
-  // Initializes sizing for a widget that sits entirely with a single block element.
+  // Initializes sizing for a widget that sits entirely within a single block element.
+  // This is copied and adapted from static initSizing() above.
   function initSizingInABlock(el) {
     var sizing = sizingPolicy(el);
     if (!sizing)
       return;
 
-    if (typeof(sizing.padding) !== "undefined") {
-      el.style.margin = "0";
-      el.style.padding = paddingToCss(unpackPadding(sizing.padding));
+    var cel = el.parentElement;
+    if (cel.id !== 'htmlwidget_container')
+      throw new Error('Parent of widget should have id htmlwidget_container');
+
+    if (typeof (sizing.padding) !== "undefined") {
+      // I don't understand the point of this, but initSizing() does it to body,
+      // so we do it to the equivalent enclosing element.
+      cel.parentElement.style.margin = "0";
+      cel.parentElement.style.padding = paddingToCss(unpackPadding(sizing.padding));
     }
 
-    // No other element of sizing is relevant to Displayr - we always want a widget to fill
-    // the size we've given it.  I suppose one day they could request sizes, like
-    // AnalysisPlots do.
+    if (sizing.fill) {
+      el.style.overflow = "hidden";
+      el.style.width = "100%";
+      el.style.height = "100%";
+      if (cel) {
+        cel.style.position = "absolute";
+        var pad = unpackPadding(sizing.padding);
+        cel.style.top = pad.top + "px";
+        cel.style.right = pad.right + "px";
+        cel.style.bottom = pad.bottom + "px";
+        cel.style.left = pad.left + "px";
+        el.style.width = "100%";
+        el.style.height = "100%";
+      }
 
-    return;  // default sizing of the element is fine
+      return {
+        getWidth: function() { return cel.offsetWidth; },
+        getHeight: function() { return cel.offsetHeight; }
+      };
+
+    } else {
+      el.style.width = px(sizing.width);
+      el.style.height = px(sizing.height);
+
+      return {
+        getWidth: function() { return el.offsetWidth; },
+        getHeight: function() { return el.offsetHeight; }
+      };
+    }
   }
 
   // Default implementations for methods
