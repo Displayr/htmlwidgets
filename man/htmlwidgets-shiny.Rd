@@ -6,10 +6,18 @@
 \alias{shinyRenderWidget}
 \title{Shiny bindings for HTML widgets}
 \usage{
-shinyWidgetOutput(outputId, name, width, height, package = name,
-  inline = FALSE, reportSize = FALSE)
+shinyWidgetOutput(
+  outputId,
+  name,
+  width,
+  height,
+  package = name,
+  inline = FALSE,
+  reportSize = FALSE,
+  reportTheme = FALSE
+)
 
-shinyRenderWidget(expr, outputFunction, env, quoted)
+shinyRenderWidget(expr, outputFunction, env, quoted, cacheHint = "auto")
 }
 \arguments{
 \item{outputId}{output variable to read from}
@@ -28,6 +36,9 @@ for the output}
 \item{reportSize}{Should the widget's container size be reported in the
 shiny session's client data?}
 
+\item{reportTheme}{Should the widget's container styles (e.g., colors and fonts)
+be reported in the shiny session's client data?}
+
 \item{expr}{An expression that generates an HTML widget (or a
 \href{https://rstudio.github.io/promises/}{promise} of an HTML widget).}
 
@@ -38,6 +49,9 @@ function.}
 
 \item{quoted}{Is \code{expr} a quoted expression (with \code{quote()})? This
 is useful if you want to save an expression in a variable.}
+
+\item{cacheHint}{Extra information to use for optional caching using
+\code{shiny::bindCache()}.}
 }
 \value{
 An output or render function that enables the use of the widget

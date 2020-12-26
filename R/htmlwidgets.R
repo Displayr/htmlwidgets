@@ -228,24 +228,108 @@ toHTML <- function(x, standalone = FALSE, knitrOptions = NULL) {
 
 }
 
+lookup_func <- function(name, package) {
+  tryCatch(
+    get(name, asNamespace(package), inherits = FALSE),
+    error = function(e) NULL
+  )
+}
 
-widget_html <- function(name, package, id, style, class, inline = FALSE, ...){
+lookup_widget_html_method <- function(name, package) {
+  # There are two ways we look for custom widget html container methods:
+  #
+  # PACKAGE:::widget_html.NAME - This is the newer, preferred lookup. Note that
+  # it doesn't actually use S3 dispatch, because we don't have an S3 object to
+  # dispatch with (widget_html can be called without a widget instance existing
+  # yet).
+  #
+  # PACKAGE:::NAME_html - This is the original, legacy lookup. This is not
+  # preferred because it's not unique enough, i.e. someone could happen to have
+  # a function with this name that's not intended for widget_html use. However,
+  # we have to keep it for now, for backward compatibility.
 
-  # attempt to lookup custom html function for widget
-  fn <- tryCatch(get(paste0(name, "_html"),
-                     asNamespace(package),
-                     inherits = FALSE),
-                 error = function(e) NULL)
+  fn_name <- paste0("widget_html.", name)
+  fn <- lookup_func(fn_name, package)
+  if (!is.null(fn)) {
+    return(list(fn = fn, name = fn_name, legacy = FALSE))
+  }
 
-  # call the custom function if we have one, otherwise create a div
-  if (is.function(fn)) {
-    fn(id = id, style = style, class = class, ...)
-  } else if (inline) {
+  fn_name <- paste0(name, "_html")
+  fn <- lookup_func(fn_name, package)
+  if (!is.null(fn)) {
+    return(list(fn = fn, name = fn_name, legacy = TRUE))
+  }
+
+  list(fn = widget_html.default, name = "widget_html.default", legacy = FALSE)
+}
+
+widget_html <- function (name, package, id, style, class, inline = FALSE, ...) {
+
+  fn_info <- lookup_widget_html_method(name, package)
+
+  fn <- fn_info[["fn"]]
+  # id, style, and class have been required args for years, but inline is fairly new
+  # and undocumented, so unsuprisingly there are widgets out there are don't have an
+  # inline arg https://github.com/renkun-ken/formattable/blob/484777/R/render.R#L79-L88
+  args <- list(id = id, style = style, class = class, ...)
+  if ("inline" %in% names(formals(fn))) {
+    args$inline <- inline
+  }
+  fn_res <- do.call(fn, args)
+  if (isTRUE(fn_info[["legacy"]])) {
+    # For the PACKAGE:::NAME_html form (only), we worry about false positives;
+    # hopefully false positives will return something that doesn't look like a
+    # Shiny tag/html and they'll get this warning as a hint
+    if (!inherits(fn_res, c("shiny.tag", "shiny.tag.list", "html"))) {
+      warning(fn_info[["name"]], " returned an object of class `", class(fn_res)[1],
+        "` instead of a `shiny.tag`."
+      )
+    }
+  }
+
+  fn_res
+}
+
+widget_html.default <- function (name, package, id, style, class, inline = FALSE, ...) {
+  if (inline) {
     tags$span(id = id, style = style, class = class)
   } else {
     tags$div(id = id, style = style, class = class)
   }
 }
+
+## These functions are to support unit tests #######################
+
+widgetA_html <- function(name, package, id, style, class, inline = FALSE, ...) {
+  tags$canvas(id = id, class = class, style = style)
+}
+
+widgetB_html <- function(name, package, id, style, class, inline = FALSE, ...) {
+  # Return a non-HTML result
+  TRUE
+}
+
+widgetC_html <- function(name, package, id, style, class, inline = FALSE, ...) {
+  tags$strong(id = id, class = class, style = style)
+}
+
+widget_html.widgetC <- function(name, package, id, style, class, inline = FALSE, ...) {
+  tags$em(id = id, class = class, style = style)
+}
+
+widget_html.widgetD <- function(name, package, id, style, class, inline = FALSE, ...) {
+  TRUE
+}
+
+widgetE_html <- function(name, package, id, style, class, inline = FALSE, ...) {
+  tagList(tags$div(id = id, style = style, class = class))
+}
+
+widgetF_html <- function(name, package, id, style, class, inline = FALSE, ...) {
+  HTML(as.character(tags$div(id = id, style = style, class = class)))
+}
+
+## End unit test support functions #################################
 
 widget_dependencies <- function(name, package){
   getDependency(name, package)
@@ -358,11 +442,15 @@ createWidget <- function(name,
 #'   function.
 #' @param reportSize Should the widget's container size be reported in the
 #'   shiny session's client data?
+#' @param reportTheme Should the widget's container styles (e.g., colors and fonts)
+#' be reported in the shiny session's client data?
 #' @param expr An expression that generates an HTML widget (or a
 #'   \href{https://rstudio.github.io/promises/}{promise} of an HTML widget).
 #' @param env The environment in which to evaluate \code{expr}.
 #' @param quoted Is \code{expr} a quoted expression (with \code{quote()})? This
 #'   is useful if you want to save an expression in a variable.
+#' @param cacheHint Extra information to use for optional caching using
+#'   \code{shiny::bindCache()}.
 #'
 #' @return An output or render function that enables the use of the widget
 #'   within Shiny applications.
@@ -386,13 +474,27 @@ createWidget <- function(name,
 #'
 #' @export
 shinyWidgetOutput <- function(outputId, name, width, height, package = name,
-                              inline = FALSE, reportSize = FALSE) {
+                              inline = FALSE, reportSize = FALSE, reportTheme = FALSE) {
 
   checkShinyVersion()
+
+  # Theme reporting requires this shiny feature
+  # https://github.com/rstudio/shiny/pull/2740/files
+  if (reportTheme &&
+      nzchar(system.file(package = "shiny")) &&
+      packageVersion("shiny") < "1.4.0.9003") {
+    message("`reportTheme = TRUE` requires shiny v.1.4.0.9003 or higher. Consider upgrading shiny.")
+  }
+
   # generate html
   html <- htmltools::tagList(
-    widget_html(name, package, id = outputId,
-      class = paste0(name, " html-widget html-widget-output", if (reportSize) " shiny-report-size"),
+    widget_html(
+      name, package, id = outputId,
+      class = paste0(
+        name, " html-widget html-widget-output",
+        if (reportSize) " shiny-report-size",
+        if (reportTheme) " shiny-report-theme"
+      ),
       style = sprintf("width:%s; height:%s; %s",
         htmltools::validateCssUnit(width),
         htmltools::validateCssUnit(height),
@@ -409,11 +511,10 @@ shinyWidgetOutput <- function(outputId, name, width, height, package = name,
 
 #' @rdname htmlwidgets-shiny
 #' @export
-shinyRenderWidget <- function(expr, outputFunction, env, quoted) {
-
+shinyRenderWidget <- function(expr, outputFunction, env, quoted, cacheHint = "auto")  {
   checkShinyVersion()
   # generate a function for the expression
-  func <- shiny::exprToFunction(expr, env, quoted)
+  shiny::installExprFunction(expr, "func", env, quoted)
 
   renderWidget <- function(instance) {
     if (!is.null(instance$elementId)) {
@@ -439,28 +540,53 @@ shinyRenderWidget <- function(expr, outputFunction, env, quoted) {
     }
 
     deps <- .subset2(instance, "dependencies")
-    deps <- lapply(
+    deps_payload <- lapply(
       htmltools::resolveDependencies(deps),
       shiny::createWebDependency
     )
-    payload <- c(createPayload(instance), list(deps = deps))
-    toJSON(payload)
+    payload <- c(createPayload(instance), list(deps = deps_payload))
+    payload <- toJSON(payload)
+    attr(payload, "deps") <- deps
+    payload
   }
 
-  if (!is.null(asNamespace("shiny")$createRenderFunction)) {
+  # The cacheHint and cacheReadHook args were added in Shiny 1.6.0.
+  if (all(c("cacheHint", "cacheReadHook") %in% names(formals(shiny::createRenderFunction)))) {
     shiny::createRenderFunction(
       func,
       function(instance, session, name, ...) {
         renderWidget(instance)
       },
-      outputFunction, NULL
+      outputFunction,
+      NULL,
+      cacheHint = cacheHint,
+      cacheReadHook = function(value) {
+        # If we've pulled the value from the cache and we're in a different R
+        # process from the one that created it, we'll need to register the
+        # dependencies again.
+        deps <- attr(value, "deps")
+        lapply(
+          htmltools::resolveDependencies(deps),
+          shiny::createWebDependency
+        )
+        value
+      }
     )
   } else {
-    shiny::markRenderFunction(outputFunction, function() {
-      renderWidget(func())
-    })
+    shiny::createRenderFunction(
+      func,
+      function(instance, session, name, ...) {
+        renderWidget(instance)
+      },
+      outputFunction,
+      NULL
+    )
   }
+
 }
+
+# For the magic behind shiny::installExprFunction()
+utils::globalVariables("func")
 
 checkShinyVersion <- function(error = TRUE) {
   x <- utils::packageDescription('htmlwidgets', fields = 'Enhances')
@@ -492,4 +618,3 @@ createPayload <- function(instance){
 
 # package globals
 .globals <- new.env(parent = emptyenv())
-
