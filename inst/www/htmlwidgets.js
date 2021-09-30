@@ -507,6 +507,16 @@
     overrideMethod(staticBinding, "find", function(superfunc) {
       return function(scope) {
         var results = superfunc(scope);
+        if (typeof results === 'undefined') {
+          var el = document.querySelector(scope);
+          if (el === null) {
+            throw new Error('VIS-934: ' + scope + ' not found in document')
+          }
+          if (typeof el["htmlwidget_data_" + name] !== 'undefined') {
+            throw new Error('VIS-934: htmlwidget_data_' + name + ' was not found. ' + JSON.stringify(el))
+          }
+          throw new Error('VIS-934: htmlwidget_data_' + name + ' was found')
+        }
         // Filter out Shiny outputs, we only want the static kind
         return filterByClass(results, "html-widget-output", false);
       };
