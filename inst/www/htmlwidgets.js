@@ -514,10 +514,10 @@
           if (el === null) {
             throw new Error('VIS-934: ' + scope + ' not found in document')
           }
-          if (typeof el["htmlwidget_data_" + name] !== 'undefined') {
-            throw new Error('VIS-934: htmlwidget_data_' + name + ' was not found. ' + JSON.stringify(el))
+          if (typeof el['htmlwidget_data_init_result'] !== 'undefined') {
+            throw new Error('VIS-934: htmlwidget_data_init_result was not found. ' + JSON.stringify(el))
           }
-          throw new Error('VIS-934: htmlwidget_data_' + name + ' was found')
+          throw new Error('VIS-934: htmlwidget_data_init_result was found. ' + JSON.stringify(el))
         }
 
         // Filter out Shiny outputs, we only want the static kind
