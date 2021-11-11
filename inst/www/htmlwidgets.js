@@ -22,11 +22,13 @@
   // We can't count on jQuery being available, so we implement our own
   // version if necessary.
   function querySelectorAll(scope, selector) {
-    if (typeof(jQuery) !== "undefined" && scope instanceof jQuery) {
-      return scope.find(selector);
-    }
-    if (scope.querySelectorAll) {
-      return scope.querySelectorAll(selector);
+    if (scope) {
+      if (typeof(jQuery) !== "undefined" && scope instanceof jQuery) {
+        return scope.find(selector);
+      }
+      if (scope.querySelectorAll) {
+        return scope.querySelectorAll(selector);
+      }
     }
   }
 
@@ -256,7 +258,7 @@
     try {
       result = eval("(" + code + ")");
     } catch(error) {
-      if (!error instanceof SyntaxError) {
+      if (!(error instanceof SyntaxError)) {
         throw error;
       }
       try {
@@ -508,16 +510,16 @@
       return function(scope) {
         var results = superfunc(scope);
 
-        // VIS-934: temporary error logging
-        if (typeof results === 'undefined') {
-          var el = document.querySelector(scope);
-          if (el === null) {
-            throw new Error('VIS-934: ' + scope + ' not found in document')
-          }
-          if (typeof el['htmlwidget_data_init_result'] !== 'undefined') {
-            throw new Error('VIS-934: htmlwidget_data_init_result was not found. ' + JSON.stringify(el))
-          }
-          throw new Error('VIS-934: htmlwidget_data_init_result was found. ' + JSON.stringify(el))
+        // VIS-934: temporary error logging 
+        if (typeof results === 'undefined') { 
+          var el = document.querySelector(scope); 
+          if (el === null) {  
+            throw new Error('VIS-934: ' + scope + ' not found in document') 
+          } 
+          if (typeof el['htmlwidget_data_init_result'] !== 'undefined') { 
+            throw new Error('VIS-934: htmlwidget_data_init_result was not found. ' + JSON.stringify(el))  
+          } 
+          throw new Error('VIS-934: htmlwidget_data_init_result was found. ' + JSON.stringify(el))  
         }
 
         // Filter out Shiny outputs, we only want the static kind
