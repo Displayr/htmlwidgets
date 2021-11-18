@@ -510,18 +510,6 @@
       return function(scope) {
         var results = superfunc(scope);
 
-        // VIS-934: temporary error logging 
-        if (typeof results === 'undefined') { 
-          var el = document.querySelector(scope); 
-          if (el === null) {  
-            throw new Error('VIS-934: ' + scope + ' not found in document') 
-          } 
-          if (typeof el['htmlwidget_data_init_result'] !== 'undefined') { 
-            throw new Error('VIS-934: htmlwidget_data_init_result was not found. ' + JSON.stringify(el))  
-          } 
-          throw new Error('VIS-934: htmlwidget_data_init_result was found. ' + JSON.stringify(el))  
-        }
-
         // Filter out Shiny outputs, we only want the static kind
         return filterByClass(results, "html-widget-output", false);
       };
