@@ -476,13 +476,9 @@ createWidget <- function(name,
 shinyWidgetOutput <- function(outputId, name, width, height, package = name,
                               inline = FALSE, reportSize = FALSE, reportTheme = FALSE) {
 
-  checkShinyVersion()
-
   # Theme reporting requires this shiny feature
   # https://github.com/rstudio/shiny/pull/2740/files
-  if (reportTheme &&
-      nzchar(system.file(package = "shiny")) &&
-      packageVersion("shiny") < "1.4.0.9003") {
+  if (reportTheme && !is_installed("shiny", "1.4.0.9003")) {
     message("`reportTheme = TRUE` requires shiny v.1.4.0.9003 or higher. Consider upgrading shiny.")
   }
 
@@ -512,7 +508,6 @@ shinyWidgetOutput <- function(outputId, name, width, height, package = name,
 #' @rdname htmlwidgets-shiny
 #' @export
 shinyRenderWidget <- function(expr, outputFunction, env, quoted, cacheHint = "auto")  {
-  checkShinyVersion()
   # generate a function for the expression
   shiny::installExprFunction(expr, "func", env, quoted)
 
@@ -599,14 +594,7 @@ checkShinyVersion <- function(error = TRUE) {
     f("Please upgrade the 'shiny' package to (at least) version ", v)
 }
 
-#' Create payload for conversion into JSON and to then run in the
-#' the browser.
-#'
-#' @param instance An htmlwidget.
-#'
-#' @return Something on which to call toJSON and give to the browser.
-#'
-#' @export
+# Helper function to create payload
 createPayload <- function(instance){
   if (!is.null(instance$preRenderHook)){
     instance <- instance$preRenderHook(instance)
