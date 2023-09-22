@@ -176,6 +176,10 @@ toHTML <- function(x, standalone = FALSE, knitrOptions = NULL) {
 
   name <- class(x)[1]
   package <- attr(x, "package")
+  if (!is.null(x$elementId))
+    id <- x$elementId
+  else
+    id <- paste("htmlwidget", attr(x, "package"), createWidgetId(), sep="-")
 
   html <- widget_html(
     name, package, id = x$id,
@@ -593,6 +597,17 @@ shinyRenderWidget <- function(expr, outputFunction, env, quoted, cacheHint = "au
 
 # For the magic behind shiny::installExprFunction()
 utils::globalVariables("func")
+
+checkShinyVersion <- function(error = TRUE) {
+  x <- utils::packageDescription('htmlwidgets', fields = 'Enhances')
+  r <- '^.*?shiny \\(>= ([0-9.]+)\\).*$'
+  if (is.na(x) || length(grep(r, x)) == 0 || system.file(package = 'shiny') == '')
+    return()
+  v <- gsub(r, '\\1', x)
+  f <- if (error) stop else packageStartupMessage
+  if (utils::packageVersion('shiny') < v)
+    f("Please upgrade the 'shiny' package to (at least) version ", v)
+}
 
 # Helper function to create payload
 createPayload <- function(instance){
