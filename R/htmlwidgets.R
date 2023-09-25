@@ -50,7 +50,7 @@ print.suppress_viewer <- function(x, ..., view = interactive()) {
 
 #' @method as.tags htmlwidget
 #' @export
-as.tags.htmlwidget <- function(x, standalone = FALSE) {
+as.tags.htmlwidget <- function(x, standalone = FALSE, ...) {
   toHTML(x, standalone = standalone)
 }
 
@@ -170,62 +170,60 @@ addHook <- function(x, hookName, jsCode, data = NULL) {
 
 toHTML <- function(x, standalone = FALSE, knitrOptions = NULL) {
 
+  x$id <- x$elementId %||% paste("htmlwidget", createWidgetId(), sep = "-")
+
   sizeInfo <- resolveSizing(x, x$sizingPolicy, standalone = standalone, knitrOptions = knitrOptions)
 
+  name <- class(x)[1]
+  package <- attr(x, "package")
   if (!is.null(x$elementId))
     id <- x$elementId
   else
     id <- paste("htmlwidget", attr(x, "package"), createWidgetId(), sep="-")
 
-  w <- validateCssUnit(sizeInfo$width)
-  h <- validateCssUnit(sizeInfo$height)
+  html <- widget_html(
+    name, package, id = x$id,
+    style = css(
+      width = validateCssUnit(sizeInfo$width),
+      height = validateCssUnit(sizeInfo$height),
+    ),
+    class = paste(
+      name, "html-widget",
+      # bindFillRole() puts `overflow:auto` to items by default,
+      # which is a sensible generic default, but in the context of
+      # widgets, we can pretty easily run into non-pixel-perfect situations
+      # (e.g., the widget JS uses something like offsetHeight to resize itself)
+      if (sizeInfo$fill) "html-fill-item-overflow-hidden"
+    ),
+    width = sizeInfo$width,
+    height = sizeInfo$height
+  )
 
-  # create a style attribute for the width and height
-  style <- paste(
-    "width:", w, ";",
-    "height:", h, ";",
-    sep = "")
+  html <- bindFillRole(html, item = sizeInfo$fill)
 
-  x$id <- id
+  html <- tagList(x$prepend, html, x$append)
 
-  container <- if (isTRUE(standalone)) {
-    function(x) {
-      div(id="htmlwidget_container", x)
-    }
-  } else {
-    identity
+  if (isTRUE(standalone)) {
+    html <- div(id = "htmlwidget_container", html)
   }
 
-  html <- htmltools::tagList(
-    container(
-      htmltools::tagList(
-        x$prepend,
-        widget_html(
-          name = class(x)[1],
-          package = attr(x, "package"),
-          id = id,
-          style = style,
-          class = paste(class(x)[1], "html-widget"),
-          width = sizeInfo$width,
-          height = sizeInfo$height
-        ),
-        x$append
-      )
-    ),
-    widget_data(x, id),
+  html <- tagList(
+    html, widget_data(x, x$id),
     if (!is.null(sizeInfo$runtime)) {
-      tags$script(type="application/htmlwidget-sizing", `data-for` = id,
+      tags$script(
+        type = "application/htmlwidget-sizing",
+        `data-for` = x$id,
         toJSON(sizeInfo$runtime)
       )
     }
   )
-  html <- htmltools::attachDependencies(html,
-    c(widget_dependencies(class(x)[1], attr(x, 'package')),
-      x$dependencies)
+
+  deps <- c(
+    widget_dependencies(name, package),
+    x$dependencies
   )
 
-  htmltools::browsable(html)
-
+  browsable(attachDependencies(html, deps, append = TRUE))
 }
 
 lookup_func <- function(name, package) {
@@ -263,7 +261,7 @@ lookup_widget_html_method <- function(name, package) {
   list(fn = widget_html.default, name = "widget_html.default", legacy = FALSE)
 }
 
-widget_html <- function (name, package, id, style, class, inline = FALSE, ...) {
+widget_html <- function(name, package, id, style, class, inline = FALSE, ...) {
 
   fn_info <- lookup_widget_html_method(name, package)
 
@@ -432,11 +430,11 @@ createWidget <- function(name,
 #'
 #' @param outputId output variable to read from
 #' @param name Name of widget to create output binding for
-#' @param width,height Must be a valid CSS unit (like \code{"100\%"},
-#'   \code{"400px"}, \code{"auto"}) or a number, which will be coerced to a
-#'   string and have \code{"px"} appended.
-#' @param package Package containing widget (defaults to \code{name})
-#' @param inline use an inline (\code{span()}) or block container (\code{div()})
+#' @param width,height Must be a valid CSS unit (like `"100%"`,
+#'   `"400px"`, `"auto"`) or a number, which will be coerced to a
+#'   string and have `"px"` appended.
+#' @param package Package containing widget (defaults to `name`)
+#' @param inline use an inline (`span()`) or block container (`div()`)
 #' for the output
 #' @param outputFunction Shiny output function corresponding to this render
 #'   function.
@@ -445,12 +443,17 @@ createWidget <- function(name,
 #' @param reportTheme Should the widget's container styles (e.g., colors and fonts)
 #' be reported in the shiny session's client data?
 #' @param expr An expression that generates an HTML widget (or a
-#'   \href{https://rstudio.github.io/promises/}{promise} of an HTML widget).
-#' @param env The environment in which to evaluate \code{expr}.
-#' @param quoted Is \code{expr} a quoted expression (with \code{quote()})? This
+#'   [promise](https://rstudio.github.io/promises/) of an HTML widget).
+#' @param env The environment in which to evaluate `expr`.
+#' @param quoted Is `expr` a quoted expression (with `quote()`)? This
 #'   is useful if you want to save an expression in a variable.
 #' @param cacheHint Extra information to use for optional caching using
-#'   \code{shiny::bindCache()}.
+#'   `shiny::bindCache()`.
+#' @param fill whether or not the returned tag should be treated as a fill item,
+#'   meaning that its `height` is allowed to grow/shrink to fit a fill container
+#'   with an opinionated height (see [htmltools::bindFillRole()] for more).
+#'   Examples of fill containers include `bslib::card()` and
+#'   `bslib::card_body_fill()`.
 #'
 #' @return An output or render function that enables the use of the widget
 #'   within Shiny applications.
@@ -473,8 +476,10 @@ createWidget <- function(name,
 #' @name htmlwidgets-shiny
 #'
 #' @export
+#' @md
 shinyWidgetOutput <- function(outputId, name, width, height, package = name,
-                              inline = FALSE, reportSize = FALSE, reportTheme = FALSE) {
+                              inline = FALSE, reportSize = TRUE, reportTheme = FALSE,
+                              fill = !inline) {
 
   # Theme reporting requires this shiny feature
   # https://github.com/rstudio/shiny/pull/2740/files
@@ -482,26 +487,36 @@ shinyWidgetOutput <- function(outputId, name, width, height, package = name,
     message("`reportTheme = TRUE` requires shiny v.1.4.0.9003 or higher. Consider upgrading shiny.")
   }
 
-  # generate html
-  html <- htmltools::tagList(
-    widget_html(
-      name, package, id = outputId,
-      class = paste0(
-        name, " html-widget html-widget-output",
-        if (reportSize) " shiny-report-size",
-        if (reportTheme) " shiny-report-theme"
-      ),
-      style = sprintf("width:%s; height:%s; %s",
-        htmltools::validateCssUnit(width),
-        htmltools::validateCssUnit(height),
-        if (inline) "display: inline-block;" else ""
-      ), width = width, height = height
-    )
+  tag <- widget_html(
+    name, package, id = outputId,
+    class = paste0(
+      name, " html-widget html-widget-output",
+      if (reportSize) " shiny-report-size",
+      if (reportTheme) " shiny-report-theme",
+      # bindFillRole() puts `overflow:auto` to items by default,
+      # which is a sensible generic default, but in the context of
+      # widgets, we can pretty easily run into non-pixel-perfect situations
+      # (e.g., the widget JS uses something like offsetHeight to resize itself)
+      if (fill) " html-fill-item-overflow-hidden"
+    ),
+    style = css(
+      width = validateCssUnit(width),
+      height = validateCssUnit(height),
+      display = if (inline) "inline-block"
+    ),
+    width = width,
+    height = height
   )
 
-  # attach dependencies
-  dependencies = widget_dependencies(name, package)
-  htmltools::attachDependencies(html, dependencies)
+  tag <- bindFillRole(tag, item = fill)
+
+  # Adds an additional and unnecessary tagList() container to the return value...
+  # I'd love remove it, but lets keep it for backwards-compatibility
+  tag <- tagList(tag)
+
+  attachDependencies(
+    tag, widget_dependencies(name, package), append = TRUE
+  )
 }
 
 
