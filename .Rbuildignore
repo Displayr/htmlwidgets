@@ -4,3 +4,5 @@ README.md
 
 ^\.github$
 ^revdep$
+^AGENTS\.md$
+^CLAUDE\.md$
